@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include "esp_heap_caps.h"
-#include "esp_log.h"
 #include "epd_driver.h"
 #include "epd_highlevel.h"
 #include "esp_adc_cal.h"
@@ -15,10 +14,10 @@ gpio_num_t PIN_BUTTON_3 = GPIO_NUM_34;
 gpio_num_t PIN_BUTTON_4 = GPIO_NUM_39;
 
 EpdiyHighlevelState epd_state;
-uint8_t *frame_buffer;
-int temp = 20;
 
 uint32_t voltage_reference = 1100;
+
+#define log_info(format, ...) Serial.printf("\x1B[35m | " format "\033[0m\n", ##__VA_ARGS__)
 
 void init_epd();
 
@@ -44,10 +43,10 @@ void display_center_message(const char *text) {
     int cursor_y = EPD_HEIGHT / 2;
     EpdFontProperties font_props = epd_font_properties_default();
     font_props.flags = EPD_DRAW_ALIGN_CENTER;
-    epd_write_string(&FiraSans_12, text, &cursor_x, &cursor_y, frame_buffer, &font_props);
+    epd_write_string(&FiraSans_12, text, &cursor_x, &cursor_y, epd_state.front_fb, &font_props);
 
     epd_poweron();
-    epd_hl_update_screen(&epd_state, MODE_GC16, temp);
+    epd_hl_update_screen(&epd_state, MODE_GC16, 20);
     delay(500);
     epd_poweroff();
     delay(1000);
@@ -58,7 +57,7 @@ void start_deep_sleep() {
     delay(400);
 
     esp_sleep_enable_ext0_wakeup(PIN_BUTTON_1, 0);
-    Serial.printf(" | starting sleep\n");
+    log_info("starting sleep");
     esp_deep_sleep_start();
 }
 
@@ -74,7 +73,6 @@ void init_adc() {
 void init_epd() {
     epd_init(EPD_OPTIONS_DEFAULT);
     epd_state = epd_hl_init(EPD_BUILTIN_WAVEFORM);
-    frame_buffer = epd_hl_get_framebuffer(&epd_state);
     epd_clear();
 }
 
@@ -86,9 +84,9 @@ __attribute__((unused)) void setup() {
 
     esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
     if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
-        Serial.printf(" | woke up by button press\n");
+        log_info("woke up by button press");
     } else {
-        Serial.printf(" | woke up by unknown reason: %u\n", wakeup_reason);
+        log_info("woke up by unknown reason: %u", wakeup_reason);
     }
 
     char message[64];
