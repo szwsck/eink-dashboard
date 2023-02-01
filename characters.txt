@@ -1,0 +1,9 @@
+abcdefghijklmnopqrstuwvxyz
+ąćęłńóśźż
+ABCDEFGHIJKLMNOPQRSTUWVXYZ
+ĄĆĘŁŃÓŚŹŻ
+0123456789
+~!@#$%^&*()_+-={}[]:";'<>,.?/`°|
+╭╸╺┬╮
+│  ├┤
+╰──┴╯
