@@ -1,10 +1,12 @@
 #include <Arduino.h>
-#include "esp_heap_caps.h"
+#include <WiFi.h>
+#include <HTTPClient.h>
 #include "epd_driver.h"
 #include "epd_highlevel.h"
 #include "esp_adc_cal.h"
 #include "esp_sleep.h"
 #include "jbmono14.h"
+#include "secrets.h"
 
 #define log_info(format, ...) Serial.printf("\x1B[36m | " format "\033[0m\n", ##__VA_ARGS__)
 
@@ -17,22 +19,8 @@ gpio_num_t PIN_BUTTON_4 = GPIO_NUM_39;
 EpdiyHighlevelState epd_state;
 
 uint32_t voltage_reference = 1100;
-const char *message = "╭╸Wydarzenia╺─────────────┬╸Autobusy╺──────────────────╮\n"
-                      "│ 08:15 - TKOM            │ 158 | 11:56, 12:26         │\n"
-                      "│ 10:15 - WUS             │ 523 | 11:38, 11:56         │\n"
-                      "│ 18:15 - PIS             │ 143 | 11:51, 12:01         │\n"
-                      "│ 20:00 - Spotkanie       │ 188 | 11:40, 11:55         │\n"
-                      "│                         ├╸Pogoda╺────────────────────┤\n"
-                      "│                         │                            │\n"
-                      "│                         │ 4°C, Pochmurnie            │\n"
-                      "│                         │                            │\n"
-                      "│                         │ 15:00 - 0°C, Śnieg         │\n"
-                      "│                         │ Jutro - -4°C, Mgła         │\n"
-                      "│                         │                            │\n"
-                      "│                         │                            │\n"
-                      "╰─────────────────────────┴───────────────────────╸45%╺╯";
 
-void init_epd();
+void log_wakeup_cause();
 
 double_t get_battery_percentage() {
     epd_poweron();
@@ -54,21 +42,16 @@ void display_message(const char *text) {
 
     int cursor_x = 4;
     int cursor_y = 30;
-    EpdFontProperties font_props = epd_font_properties_default();
-    font_props.flags = EPD_DRAW_ALIGN_LEFT;
-    epd_write_string(&jbmono14, text, &cursor_x, &cursor_y, epd_state.front_fb, &font_props);
+    epd_write_default(&jbmono14, text, &cursor_x, &cursor_y, epd_state.front_fb);
 
     epd_poweron();
     epd_hl_update_screen(&epd_state, MODE_GC16, 20);
-    delay(500);
     epd_poweroff();
-    delay(1000);
 }
 
 void start_deep_sleep() {
     epd_poweroff();
-    delay(400);
-
+    epd_deinit();
     esp_sleep_enable_ext0_wakeup(PIN_BUTTON_1, 0);
     log_info("starting sleep");
     esp_deep_sleep_start();
@@ -84,30 +67,64 @@ void init_adc() {
 }
 
 void init_epd() {
-    epd_init(EPD_OPTIONS_DEFAULT);
+    epd_init(EPD_LUT_1K);
     epd_state = epd_hl_init(EPD_BUILTIN_WAVEFORM);
+    epd_clear();
+}
+
+void init_wifi() {
+    log_info("connecting to %s", ssid);
+    WiFi.begin(ssid, password);
+    while (WiFiClass::status() != WL_CONNECTED) {
+        delay(500);
+        log_info(".");
+    }
+    log_info("connected to %s", ssid);
+}
+
+void download_message(char *buf) {
+    log_info("downloading message");
+
+    HTTPClient http;
+    http.begin("http://51.83.140.52:10400/lilygo");
+
+    int code = http.GET();
+
+    if (code == 200) {
+        String payload = http.getString();
+        strcpy(buf, payload.c_str());
+        log_info("downloaded message:\n%s", buf);
+        return;
+    } else {
+        log_info("ERROR: invalid reponse code %u", code);
+    }
+}
+
+void log_wakeup_cause() {
+    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    if (cause == ESP_SLEEP_WAKEUP_EXT0) {
+        log_info("woke up");
+    } else if (cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+        log_info("first boot");
+    } else {
+        log_info("woke up by unknown cause: %u", cause);
+    }
 }
 
 __attribute__((unused)) void setup() {
     Serial.begin(115200);
-    init_adc();
+
+    log_wakeup_cause();
+
+//    init_adc();
     init_epd();
-
-    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
-    if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
-        log_info("woke up");
-    } else if (wakeup_reason == ESP_SLEEP_WAKEUP_UNDEFINED) {
-        log_info("first boot");
-        epd_clear();
-        display_message(message);
-
-    } else {
-        log_info("woke up by unknown reason: %u", wakeup_reason);
-    }
-
-    start_deep_sleep();
+    init_wifi();
 }
 
 __attribute__((unused)) void loop() {
+    char buf[2048] = "hello!";
+//    download_message(buf);
+    display_message(buf);
 
+    start_deep_sleep();
 }
