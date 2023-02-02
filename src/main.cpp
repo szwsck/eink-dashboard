@@ -1,26 +1,17 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include "epd_driver.h"
-#include "epd_highlevel.h"
 #include "esp_adc_cal.h"
 #include "esp_sleep.h"
 #include "jbmono14.h"
 #include "secrets.h"
-
-#define log_info(format, ...) Serial.printf("\x1B[36m | " format "\033[0m\n", ##__VA_ARGS__)
+#include "display.h"
+#include "log.h"
+#include "sleep.h"
 
 gpio_num_t PIN_BATTERY = GPIO_NUM_36;
-gpio_num_t PIN_BUTTON_1 = GPIO_NUM_0;
-gpio_num_t PIN_BUTTON_2 = GPIO_NUM_35;
-gpio_num_t PIN_BUTTON_3 = GPIO_NUM_34;
-gpio_num_t PIN_BUTTON_4 = GPIO_NUM_39;
-
-EpdiyHighlevelState epd_state;
 
 uint32_t voltage_reference = 1100;
-
-void log_wakeup_cause();
 
 double_t get_battery_percentage() {
     epd_poweron();
@@ -37,26 +28,6 @@ double_t get_battery_percentage() {
     return percentage;
 }
 
-void display_message(const char *text) {
-    epd_hl_set_all_white(&epd_state);
-
-    int cursor_x = 4;
-    int cursor_y = 30;
-    epd_write_default(&jbmono14, text, &cursor_x, &cursor_y, epd_state.front_fb);
-
-    epd_poweron();
-    epd_hl_update_screen(&epd_state, MODE_GC16, 20);
-    epd_poweroff();
-}
-
-void start_deep_sleep() {
-    epd_poweroff();
-    epd_deinit();
-    esp_sleep_enable_ext0_wakeup(PIN_BUTTON_1, 0);
-    log_info("starting sleep");
-    esp_deep_sleep_start();
-}
-
 void init_adc() {
     esp_adc_cal_characteristics_t adc_chars;
     esp_adc_cal_value_t val_type = esp_adc_cal_characterize(
@@ -64,12 +35,6 @@ void init_adc() {
     );
     assert(val_type == ESP_ADC_CAL_VAL_EFUSE_VREF);
     voltage_reference = adc_chars.vref;
-}
-
-void init_epd() {
-    epd_init(EPD_LUT_1K);
-    epd_state = epd_hl_init(EPD_BUILTIN_WAVEFORM);
-    epd_clear();
 }
 
 void init_wifi() {
@@ -100,31 +65,35 @@ void download_message(char *buf) {
     }
 }
 
-void log_wakeup_cause() {
-    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-    if (cause == ESP_SLEEP_WAKEUP_EXT0) {
-        log_info("woke up");
-    } else if (cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
-        log_info("first boot");
-    } else {
-        log_info("woke up by unknown cause: %u", cause);
-    }
+RTC_DATA_ATTR uint32_t update_num;
+
+void handle_first_boot() {
+    log_info("handling first boot");
+}
+
+void update() {
+    log_info("performing update %u", update_num);
+
+    char text[1024];
+    itoa((int) update_num, text, 10);
+
+    display_init();
+    display_show(text);
+    display_deinit();
+
+    update_num++;
 }
 
 __attribute__((unused)) void setup() {
     Serial.begin(115200);
 
-    log_wakeup_cause();
+    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
+        handle_first_boot();
+    }
 
-//    init_adc();
-    init_epd();
-    init_wifi();
+    update();
 }
 
 __attribute__((unused)) void loop() {
-    char buf[2048] = "hello!";
-//    download_message(buf);
-    display_message(buf);
-
-    start_deep_sleep();
+    deep_sleep();
 }
