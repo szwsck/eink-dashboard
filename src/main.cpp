@@ -18,7 +18,7 @@ void update(bool first_boot) {
 
     char battery_level[4];
     get_battery_level(battery_level);
-    display_message(battery_level, 51, 13);
+    display_message(battery_level, 37, 10);
 }
 
 __attribute__((unused)) void setup() {

@@ -24,8 +24,8 @@ void display_message(const char *text, uint8_t offset_x, uint8_t offset_y) {
     if (!display_initialized) display_init();
     log_info("displaying text:\n%s", text);
 
-    int cursor_x = 4 + offset_x * jbmono14_Glyphs[0].advance_x;
-    int cursor_y = 25 + offset_y * jbmono14.advance_y;
+    int cursor_x = -2 + offset_x * jbmono14_Glyphs[0].advance_x;
+    int cursor_y = jbmono14.ascender + jbmono14.descender + 6 + offset_y * jbmono14.advance_y;
     epd_write_default(&jbmono14, text, &cursor_x, &cursor_y, state.front_fb);
 
     epd_poweron();
