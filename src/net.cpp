@@ -3,6 +3,7 @@
 #include "net.h"
 #include "log.h"
 #include "secrets.h"
+#include "battery.h"
 
 #define WIFI_TIMEOUT 20
 #define HTTP_TIMEOUT 20
@@ -33,7 +34,7 @@ bool update_message(char *etag, char *buf) {
     HTTPClient http;
     http.setTimeout(HTTP_TIMEOUT * 1000);
     http.setConnectTimeout(HTTP_TIMEOUT * 1000);
-    http.begin(url);
+    http.begin(String(url) + "?voltage=" + String(get_battery_voltage()));
     http.addHeader("If-None-Match", String(etag));
     const char *responseHeaders[] = {"ETag"};
     http.collectHeaders(responseHeaders, 1);

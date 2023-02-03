@@ -38,3 +38,16 @@ void get_battery_level(char *buf) {
     }
 
 }
+
+double get_battery_voltage() {
+    log_info("getting battery voltage");
+    correct_adc_reference();
+
+    display_init();
+    epd_poweron();
+    uint16_t reading = analogRead(BATT_PIN);
+    epd_poweroff();
+
+    return ((double_t) reading / 4095.0) * 2.0 * 3.3 * (vref / 1000.0);
+
+}
